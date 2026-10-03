@@ -57,7 +57,7 @@ function renderHome(){
     <section class="hero">
       <div class="hero-card">
         <div class="kicker">${escapeHtml(content.courseTitle)}</div>
-        <h1>История, которую можно потрогать</h1>
+        <h1>Изучай историю шаг за шагом</h1>
         <p class="lead">Короткие объяснения, интерактивные задания, подсказки и звёзды за прогресс. Начинай с любой темы.</p>
         <div class="student-banner">👋 ${escapeHtml(student.name)}</div>
       </div>
