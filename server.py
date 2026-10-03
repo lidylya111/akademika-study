@@ -8,7 +8,20 @@ from email.parser import BytesParser
 from email.policy import default as email_policy
 
 ROOT = Path(__file__).resolve().parent
-DATA_DIR = Path(os.environ.get('DATA_DIR', str(ROOT))).resolve()
+
+# On Railway always use the path of the actually attached persistent Volume.
+# This prevents accidental writes to the ephemeral /app filesystem after a redeploy.
+ON_RAILWAY = bool(os.environ.get('RAILWAY_PROJECT_ID'))
+RAILWAY_VOLUME_MOUNT_PATH = (os.environ.get('RAILWAY_VOLUME_MOUNT_PATH') or '').strip()
+if ON_RAILWAY:
+    if not RAILWAY_VOLUME_MOUNT_PATH:
+        raise RuntimeError(
+            'Railway Volume is not attached. Attach a Volume before starting Akademika Study.'
+        )
+    DATA_DIR = Path(RAILWAY_VOLUME_MOUNT_PATH).resolve()
+else:
+    DATA_DIR = Path(os.environ.get('DATA_DIR', str(ROOT))).resolve()
+
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 UPLOAD_DIR = DATA_DIR / 'uploads'
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -25,8 +38,9 @@ def load_default_content():
     return DEFAULT_CONTENT
 
 def db():
-    con=sqlite3.connect(DB)
+    con=sqlite3.connect(DB, timeout=30)
     con.row_factory=sqlite3.Row
+    con.execute('PRAGMA foreign_keys=ON')
     return con
 
 def init_db():
@@ -220,5 +234,7 @@ class Handler(SimpleHTTPRequestHandler):
 if __name__=='__main__':
     os.chdir(ROOT); init_db()
     print(f'Akademika Study: http://127.0.0.1:{PORT}')
+    print(f'Persistent data directory: {DATA_DIR}')
+    print(f'Database file: {DB}')
     print('Teacher PIN:', TEACHER_PIN if TEACHER_PIN=='2468' else '(set in environment)')
     ThreadingHTTPServer(('0.0.0.0',PORT),Handler).serve_forever()
