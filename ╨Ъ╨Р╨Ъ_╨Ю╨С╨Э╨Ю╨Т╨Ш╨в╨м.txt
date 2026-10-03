@@ -1,0 +1,18 @@
+ОБНОВЛЕНИЕ AKADEMIKA STUDY: ПРЕЗЕНТАЦИИ
+
+1. Распакуйте этот ZIP.
+2. Откройте ваш репозиторий akademika-study на GitHub.
+3. Нажмите Add file → Upload files.
+4. Перетащите 4 файла из этой папки:
+   server.py
+   app.js
+   styles.css
+   Dockerfile
+5. Подтвердите замену файлов и нажмите Commit changes.
+6. Вернитесь в Railway и дождитесь нового успешного Deploy.
+7. DATA_DIR=/data и TEACHER_PIN НЕ МЕНЯЙТЕ.
+8. Volume /data НЕ УДАЛЯЙТЕ.
+
+После обновления:
+Режим учителя → Темы и задания → Материалы → + Презентация.
+Можно загрузить PDF/PPTX или добавить ссылку.

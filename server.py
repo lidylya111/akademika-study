@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
-import json, os, sqlite3, secrets, string, mimetypes
+import json, os, sqlite3, secrets, subprocess, tempfile, uuid
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 from pathlib import Path
 from datetime import datetime, timezone
+from email.parser import BytesParser
+from email.policy import default as email_policy
 
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ.get('DATA_DIR', str(ROOT))).resolve()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+UPLOAD_DIR = DATA_DIR / 'uploads'
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 DB = DATA_DIR / 'akademika.sqlite3'
 PORT = int(os.environ.get('PORT', '8000'))
 TEACHER_PIN = os.environ.get('TEACHER_PIN', '2468')
+MAX_UPLOAD = 40 * 1024 * 1024
 
 DEFAULT_CONTENT = None
 
@@ -55,10 +60,35 @@ def code6():
     alphabet='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
     return ''.join(secrets.choice(alphabet) for _ in range(6))
 
+def parse_multipart(handler):
+    ctype=handler.headers.get('Content-Type','')
+    if 'multipart/form-data' not in ctype:
+        raise ValueError('Ожидалась форма с файлом')
+    n=int(handler.headers.get('Content-Length','0') or 0)
+    if n<=0 or n>MAX_UPLOAD:
+        raise ValueError('Файл слишком большой. Максимум 40 МБ')
+    body=handler.rfile.read(n)
+    raw=(f'Content-Type: {ctype}\r\nMIME-Version: 1.0\r\n\r\n').encode()+body
+    msg=BytesParser(policy=email_policy).parsebytes(raw)
+    fields={}; files={}
+    for part in msg.iter_parts():
+        name=part.get_param('name', header='content-disposition')
+        filename=part.get_filename()
+        payload=part.get_payload(decode=True) or b''
+        if not name: continue
+        if filename:
+            files[name]={'filename':filename,'data':payload,'content_type':part.get_content_type()}
+        else:
+            fields[name]=payload.decode(part.get_content_charset() or 'utf-8', errors='replace')
+    return fields,files
+
 class Handler(SimpleHTTPRequestHandler):
     def translate_path(self, path):
         p=urlparse(path).path
         if p=='/': p='/index.html'
+        if p.startswith('/uploads/'):
+            name=Path(p).name
+            return str(UPLOAD_DIR / name)
         return str(ROOT / p.lstrip('/'))
 
     def log_message(self, format, *args):
@@ -102,7 +132,7 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path=='/api/content':
             if not self.teacher_ok(): return self.send_json({'error':'Неверный PIN'},401)
             try: obj=self.json_body(); set_content(obj); return self.send_json({'ok':True})
-            except Exception as e: return self.send_json({'error':'Не удалось сохранить курс'},400)
+            except Exception: return self.send_json({'error':'Не удалось сохранить курс'},400)
         return self.send_json({'error':'Не найдено'},404)
 
     def do_POST(self):
@@ -125,6 +155,43 @@ class Handler(SimpleHTTPRequestHandler):
             while c.execute('SELECT 1 FROM students WHERE code=?',(code,)).fetchone(): code=code6()
             cur=c.execute('INSERT INTO students(name,code,created_at) VALUES(?,?,?)',(name,code,now())); c.commit(); sid=cur.lastrowid; c.close()
             return self.send_json({'student':{'id':sid,'name':name,'code':code}})
+        if u.path=='/api/presentations':
+            if not self.teacher_ok(): return self.send_json({'error':'Неверный PIN'},401)
+            try:
+                fields,files=parse_multipart(self)
+                topic_id=(fields.get('topicId') or '').strip()
+                title=(fields.get('title') or 'Презентация').strip() or 'Презентация'
+                f=files.get('file')
+                if not f: raise ValueError('Выберите файл')
+                original=Path(f['filename']).name
+                ext=Path(original).suffix.lower()
+                if ext not in ('.pdf','.pptx'):
+                    raise ValueError('Можно загрузить PDF или PPTX')
+                token=uuid.uuid4().hex
+                if ext=='.pdf':
+                    out=UPLOAD_DIR/f'{token}.pdf'; out.write_bytes(f['data'])
+                else:
+                    tmpdir=Path(tempfile.mkdtemp(prefix='akademika-'))
+                    src=tmpdir/f'{token}.pptx'; src.write_bytes(f['data'])
+                    try:
+                        proc=subprocess.run(['libreoffice','--headless','--convert-to','pdf','--outdir',str(UPLOAD_DIR),str(src)],capture_output=True,text=True,timeout=120)
+                    except FileNotFoundError:
+                        raise ValueError('На сервере не установлен конвертер PPTX. Загрузите PDF.')
+                    finally:
+                        try: src.unlink(missing_ok=True); tmpdir.rmdir()
+                        except Exception: pass
+                    out=UPLOAD_DIR/f'{token}.pdf'
+                    if proc.returncode!=0 or not out.exists():
+                        raise ValueError('Не удалось преобразовать PPTX. Сохраните презентацию как PDF и загрузите PDF.')
+                obj=get_content(); topic=next((t for t in obj.get('topics',[]) if t.get('id')==topic_id),None)
+                if not topic:
+                    out.unlink(missing_ok=True); raise ValueError('Тема не найдена')
+                mat={'id':'mat-'+uuid.uuid4().hex[:10],'type':'presentation','title':title,'source':'file','url':'/uploads/'+out.name,'sourceName':original,'createdAt':now()}
+                topic.setdefault('materials',[]).append(mat); set_content(obj)
+                return self.send_json({'ok':True,'material':mat,'content':obj})
+            except ValueError as e: return self.send_json({'error':str(e)},400)
+            except Exception as e:
+                print('presentation upload error',repr(e)); return self.send_json({'error':'Не удалось загрузить презентацию'},500)
         return self.send_json({'error':'Не найдено'},404)
 
     def do_DELETE(self):
@@ -133,6 +200,21 @@ class Handler(SimpleHTTPRequestHandler):
             try: sid=int(self.path.rsplit('/',1)[-1])
             except: return self.send_json({'error':'Некорректный ID'},400)
             c=db(); c.execute('DELETE FROM progress WHERE student_id=?',(sid,)); c.execute('DELETE FROM students WHERE id=?',(sid,)); c.commit(); c.close(); return self.send_json({'ok':True})
+        if self.path.startswith('/api/presentations/'):
+            if not self.teacher_ok(): return self.send_json({'error':'Неверный PIN'},401)
+            mid=self.path.rsplit('/',1)[-1]
+            obj=get_content(); found=None
+            for t in obj.get('topics',[]):
+                mats=t.get('materials',[])
+                for m in mats:
+                    if m.get('id')==mid:
+                        found=m; t['materials']=[x for x in mats if x.get('id')!=mid]; break
+                if found: break
+            if not found: return self.send_json({'error':'Материал не найден'},404)
+            url=found.get('url','')
+            if found.get('source')=='file' and url.startswith('/uploads/'):
+                (UPLOAD_DIR/Path(url).name).unlink(missing_ok=True)
+            set_content(obj); return self.send_json({'ok':True,'content':obj})
         return self.send_json({'error':'Не найдено'},404)
 
 if __name__=='__main__':
