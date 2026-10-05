@@ -196,7 +196,6 @@ function renderCourseHome(){
   currentTopicId=null;
   const p=totalCourseProgress();
   app.innerHTML=`
-app.innerHTML=`
 <button class="back" id="backToSubjects">← 5 класс • Предметы</button>
 
 <section class="hero">
