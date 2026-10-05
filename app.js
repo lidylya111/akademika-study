@@ -49,12 +49,157 @@ function totalCourseProgress(){
 }
 function starsFor(percent){ return percent>=90?3:percent>=70?2:percent>0?1:0; }
 function starsText(n){ return '★'.repeat(n)+'☆'.repeat(3-n); }
+const GRADE_SUBJECTS = {
+  '1': [
+    {id:'russian', title:'Русский язык', emoji:'✏️'},
+    {id:'math', title:'Математика', emoji:'➗'},
+    {id:'world', title:'Окружающий мир', emoji:'🌍'},
+    {id:'literature', title:'Литература', emoji:'📚'}
+  ],
+  '2': [
+    {id:'russian', title:'Русский язык', emoji:'✏️'},
+    {id:'math', title:'Математика', emoji:'➗'},
+    {id:'world', title:'Окружающий мир', emoji:'🌍'},
+    {id:'literature', title:'Литература', emoji:'📚'}
+  ],
+  '3': [
+    {id:'russian', title:'Русский язык', emoji:'✏️'},
+    {id:'math', title:'Математика', emoji:'➗'},
+    {id:'world', title:'Окружающий мир', emoji:'🌍'},
+    {id:'literature', title:'Литература', emoji:'📚'}
+  ],
+  '4': [
+    {id:'russian', title:'Русский язык', emoji:'✏️'},
+    {id:'math', title:'Математика', emoji:'➗'},
+    {id:'world', title:'Окружающий мир', emoji:'🌍'},
+    {id:'literature', title:'Литература', emoji:'📚'}
+  ],
+  '5': [
+    {id:'russian', title:'Русский язык', emoji:'✏️'},
+    {id:'math', title:'Математика', emoji:'➗'},
+    {id:'history', title:'История', emoji:'🏺'},
+    {id:'biology', title:'Биология', emoji:'🌱'},
+    {id:'geography', title:'География', emoji:'🌎'}
+  ]
+};
+
+let currentGrade = null;
+let currentSubject = null;
 
 function renderHome(){
+  currentGrade = null;
+  currentSubject = null;
+  currentTopicId = null;
+
+  app.innerHTML = `
+    <section class="hero">
+      <div class="hero-card">
+        <div class="kicker">Академика • Учёба</div>
+        <h1>Выбери свой класс</h1>
+        <p class="lead">Здесь собраны уроки, презентации и задания по школьным предметам.</p>
+      </div>
+    </section>
+
+    <div class="section-title">
+      <div>
+        <h2>Классы</h2>
+        <p>Нажми на свой класс, чтобы выбрать предмет.</p>
+      </div>
+    </div>
+
+    <section class="topic-grid">
+      ${[1,2,3,4,5].map(grade => `
+        <button class="topic-card grade-card" data-grade="${grade}">
+          <div class="topic-num">${grade}</div>
+          <div class="topic-emoji">🎒</div>
+          <h3>${grade} класс</h3>
+          <p>Перейти к предметам</p>
+          <div class="topic-footer">
+            <span></span>
+            <span class="go">Открыть →</span>
+          </div>
+        </button>
+      `).join('')}
+    </section>
+  `;
+
+  $$('.grade-card').forEach(btn => {
+    btn.onclick = () => renderSubjectSelect(btn.dataset.grade);
+  });
+}
+
+function renderSubjectSelect(grade){
+  currentGrade = grade;
+  currentSubject = null;
+
+  const subjects = GRADE_SUBJECTS[grade] || [];
+
+  app.innerHTML = `
+    <button class="back" id="backToGrades">← К классам</button>
+
+    <div class="section-title">
+      <div>
+        <div class="kicker">Академика • Учёба</div>
+        <h2>${grade} класс</h2>
+        <p>Выбери предмет.</p>
+      </div>
+    </div>
+
+    <section class="topic-grid">
+      ${subjects.map(subject => `
+        <button class="topic-card subject-card" data-subject="${subject.id}">
+          <div class="topic-emoji">${subject.emoji}</div>
+          <h3>${escapeHtml(subject.title)}</h3>
+          <p>Уроки, презентации и задания</p>
+          <div class="topic-footer">
+            <span></span>
+            <span class="go">Открыть →</span>
+          </div>
+        </button>
+      `).join('')}
+    </section>
+  `;
+
+  $('#backToGrades').onclick = renderHome;
+
+  $$('.subject-card').forEach(btn => {
+    btn.onclick = () => openSubject(grade, btn.dataset.subject);
+  });
+}
+
+function openSubject(grade, subject){
+  currentGrade = grade;
+  currentSubject = subject;
+
+  if(grade === '5' && subject === 'history'){
+    renderCourseHome();
+    return;
+  }
+
+  const info = (GRADE_SUBJECTS[grade] || []).find(s => s.id === subject);
+
+  app.innerHTML = `
+    <button class="back" id="backToSubjects">← К предметам</button>
+
+    <section class="hero">
+      <div class="hero-card">
+        <div class="kicker">${grade} класс</div>
+        <h1>${escapeHtml(info?.title || 'Предмет')}</h1>
+        <p class="lead">Материалы для этого предмета скоро появятся.</p>
+      </div>
+    </section>
+  `;
+
+  $('#backToSubjects').onclick = () => renderSubjectSelect(grade);
+}
+function renderCourseHome(){
   currentTopicId=null;
   const p=totalCourseProgress();
   app.innerHTML=`
-    <section class="hero">
+app.innerHTML=`
+<button class="back" id="backToSubjects">← 5 класс • Предметы</button>
+
+<section class="hero">
       <div class="hero-card">
         <div class="kicker">${escapeHtml(content.courseTitle)}</div>
         <h1>Изучай историю шаг за шагом</h1>
@@ -79,6 +224,7 @@ function renderHome(){
     </section>
     ${mode==='local'?`<div class="admin-card" style="margin-top:25px"><b>Демо-режим:</b> сайт открыт как обычный файл. Задания и изменения сохраняются только в этом браузере. После запуска <span class="code">server.py</span> или публикации на хостинге результаты будут общими для учеников и учителя.</div>`:''}
   `;
+  $('#backToSubjects').onclick=()=>renderSubjectSelect('5');
   $$('.topic-card').forEach(b=>b.onclick=()=>openTopic(b.dataset.topic));
 }
 
@@ -108,7 +254,7 @@ function renderTopic(t){
     ${materialCards(t)}
     ${completed ? completionHtml(t,state) : (t.tasks.length?`<div class="task-wrap"><nav class="task-nav">${t.tasks.map((q,i)=>`<button data-idx="${i}" class="${i===idx?'active':''} ${state.solved[q.id]?'done':''}">${i+1}. ${escapeHtml(q.title||'Задание')}</button>`).join('')}</nav><section id="taskArea"></section></div>`:`<div class="admin-card"><b>Заданий пока нет.</b> Сначала изучи материал выше.</div>`)}
   `;
-  $('#backHome').onclick=renderHome;
+$('#backHome').onclick=renderCourseHome;
   $$('.material-card').forEach(b=>b.onclick=()=>openMaterial(t,b.dataset.mid));
   if(completed){ $('#againBtn').onclick=()=>{taskState[t.id]={index:0,solved:{},attempts:{},answers:{},points:{}};renderTopic(t)}; return; }
   if(!t.tasks.length)return;
@@ -122,7 +268,7 @@ function completionHtml(t,state){
   const percent=Math.round(earned/t.tasks.length*100); const stars=starsFor(percent);
   saveProgress(t.id,percent,stars,Object.values(state.attempts).reduce((a,b)=>a+b,0));
   setTimeout(confetti,80);
-  return `<div class="completion"><div class="trophy">${percent>=90?'🏆':'🌟'}</div><h2>Урок пройден!</h2><div class="stars" style="font-size:32px">${starsText(stars)}</div><p class="score">${solved} из ${t.tasks.length} заданий • ${percent}%</p><p>${percent>=90?'Отличная работа!':percent>=70?'Тема освоена. Можно двигаться дальше!':'Можно пройти ещё раз и улучшить результат.'}</p><div class="controls" style="justify-content:center"><button class="btn yellow" id="againBtn">Пройти ещё раз</button><button class="btn primary" onclick="renderHome()">К темам</button></div></div>`;
+  return `<div class="completion"><div class="trophy">${percent>=90?'🏆':'🌟'}</div><h2>Урок пройден!</h2><div class="stars" style="font-size:32px">${starsText(stars)}</div><p class="score">${solved} из ${t.tasks.length} заданий • ${percent}%</p><p>${percent>=90?'Отличная работа!':percent>=70?'Тема освоена. Можно двигаться дальше!':'Можно пройти ещё раз и улучшить результат.'}</p><div class="controls" style="justify-content:center"><button class="btn yellow" id="againBtn">Пройти ещё раз</button><button class="btn primary" onclick="renderCourseHome()">К темам</button></div></div>`;
 }
 
 async function saveProgress(topicId,percent,stars,attempts){
