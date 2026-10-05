@@ -19,9 +19,7 @@ body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI"
 button,input,textarea,select{font:inherit}
 button{cursor:pointer}
 .topbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;padding:14px 22px;background:rgba(255,253,244,.88);backdrop-filter:blur(14px);border-bottom:1px solid rgba(70,60,20,.08)}
-<div class="brand-mark">
-  <img src="logo.png.png" alt="Логотип Академика">
-</div>
+.brand{display:flex;align-items:center;gap:11px;font-weight:900;font-size:20px}.brand-mark{width:42px;height:42px;border-radius:14px;background:var(--yellow);display:grid;place-items:center;box-shadow:var(--shadow)}
 .top-actions{display:flex;gap:8px;align-items:center}.pill{border:0;border-radius:999px;padding:10px 15px;background:#fff;box-shadow:0 4px 18px rgba(0,0,0,.07);font-weight:700}.pill.primary{background:var(--green);color:white}.pill.yellow{background:var(--yellow)}
 .container{width:min(1120px,calc(100% - 28px));margin:0 auto;padding:28px 0 60px}
 .hero{display:grid;grid-template-columns:1.25fr .75fr;gap:22px;align-items:stretch;margin-top:10px}.hero-card,.progress-card,.card,.admin-card{background:rgba(255,255,255,.82);border:1px solid rgba(75,65,25,.08);box-shadow:var(--shadow);border-radius:var(--radius)}
