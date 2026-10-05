@@ -152,23 +152,78 @@ class Handler(SimpleHTTPRequestHandler):
     def do_POST(self):
         u=urlparse(self.path)
         if u.path=='/api/progress':
-            try: data=self.json_body(); code=data.get('studentCode','')
-            except: return self.send_json({'error':'Некорректные данные'},400)
-            if not code or code=='guest': return self.send_json({'ok':True,'saved':False})
-            c=db(); s=c.execute('SELECT id FROM students WHERE code=?',(code,)).fetchone()
-            if not s: c.close(); return self.send_json({'error':'Ученик не найден'},404)
-            c.execute('''INSERT INTO progress(student_id,topic_id,percent,stars,attempts,updated_at) VALUES(?,?,?,?,?,?)
-                         ON CONFLICT(student_id,topic_id) DO UPDATE SET percent=excluded.percent,stars=excluded.stars,attempts=excluded.attempts,updated_at=excluded.updated_at''',
-                      (s['id'],data.get('topicId',''),int(data.get('percent',0)),int(data.get('stars',0)),int(data.get('attempts',0)),now()))
-            c.commit(); c.close(); return self.send_json({'ok':True,'saved':True})
+            try:
+                data=self.json_body()
+                code=data.get('studentCode','')
+            except:
+                return self.send_json({'error':'Некорректные данные'},400)
+
+            if not code or code=='guest':
+                return self.send_json({'ok':True,'saved':False})
+
+            c=db()
+            s=c.execute(
+                'SELECT id FROM students WHERE code=?',
+                (code,)
+            ).fetchone()
+
+            if not s:
+                c.close()
+                return self.send_json({'error':'Ученик не найден'},404)
+
+            topic_id=str(data.get('topicId','')).strip()
+            percent=int(data.get('percent',0))
+            stars=int(data.get('stars',0))
+            attempts=int(data.get('attempts',0))
+            updated_at=now()
+
+            cur=c.execute(
+                'UPDATE progress SET percent=?, stars=?, attempts=?, updated_at=? '
+                'WHERE student_id=? AND topic_id=?',
+                (percent, stars, attempts, updated_at, s['id'], topic_id)
+            )
+
+            if cur.rowcount == 0:
+                c.execute(
+                    'INSERT INTO progress(student_id, topic_id, percent, stars, attempts, updated_at) '
+                    'VALUES(?,?,?,?,?,?)',
+                    (s['id'], topic_id, percent, stars, attempts, updated_at)
+                )
+
+            c.commit()
+            c.close()
+            return self.send_json({'ok':True,'saved':True})
+
         if u.path=='/api/students':
-            if not self.teacher_ok(): return self.send_json({'error':'Неверный PIN'},401)
-            data=self.json_body(); name=str(data.get('name','')).strip()
-            if not name: return self.send_json({'error':'Введите имя'},400)
-            c=db(); code=code6()
-            while c.execute('SELECT 1 FROM students WHERE code=?',(code,)).fetchone(): code=code6()
-            cur=c.execute('INSERT INTO students(name,code,created_at) VALUES(?,?,?)',(name,code,now())); c.commit(); sid=cur.lastrowid; c.close()
-            return self.send_json({'student':{'id':sid,'name':name,'code':code}})
+            if not self.teacher_ok():
+                return self.send_json({'error':'Неверный PIN'},401)
+
+            data=self.json_body()
+            name=str(data.get('name','')).strip()
+
+            if not name:
+                return self.send_json({'error':'Введите имя'},400)
+
+            c=db()
+            code=code6()
+
+            while c.execute(
+                'SELECT 1 FROM students WHERE code=?',
+                (code,)
+            ).fetchone():
+                code=code6()
+
+            cur=c.execute(
+                'INSERT INTO students(name,code,created_at) VALUES(?,?,?)',
+                (name,code,now())
+            )
+            c.commit()
+            sid=cur.lastrowid
+            c.close()
+
+            return self.send_json({
+                'student':{'id':sid,'name':name,'code':code}
+            })
         if u.path=='/api/presentations':
             if not self.teacher_ok(): return self.send_json({'error':'Неверный PIN'},401)
             try:
