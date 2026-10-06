@@ -956,25 +956,271 @@ function renderAdmin(tab){
   $$('.admin-menu button').forEach(b=>b.onclick=()=>renderAdmin(b.dataset.tab));
   if(tab==='content')renderAdminContent(); if(tab==='students')renderStudents(); if(tab==='results')renderResults(); if(tab==='backup')renderBackup();
 }
+let adminSubject = 'history';
 
-function renderAdminContent(){
-  const m=$('#adminMain');
-  m.innerHTML=`<div class="admin-card"><div class="spread"><div><h2>Темы курса</h2><p class="small">Можно менять темы, добавлять презентации и редактировать задания.</p></div><button class="btn yellow" id="addTopic">+ Новая тема</button></div></div>${content.topics.map(t=>`<div class="admin-card"><div class="spread"><div><div class="kicker">${escapeHtml(t.number)}</div><h2>${escapeHtml(t.emoji||'📚')} ${escapeHtml(t.title)}</h2><p>${escapeHtml(t.short||'')}</p></div><div class="row"><button class="btn ghost edit-topic" data-id="${t.id}">Изменить тему</button><button class="btn danger delete-topic" data-id="${t.id}">Удалить</button></div></div>
-  <div class="material-admin"><div class="spread"><div><h3>Материалы (${(t.materials||[]).length})</h3><p class="small">PDF и PPTX открываются ребёнку прямо в теме. Можно также добавить внешнюю ссылку.</p></div><button class="btn yellow add-material" data-t="${t.id}">+ Презентация</button></div>${(t.materials||[]).length?`<div>${(t.materials||[]).map(mat=>`<div class="task-edit-item spread"><div><b>🖥️ ${escapeHtml(mat.title||'Презентация')}</b><div class="small">${mat.source==='file'?'Файл: '+escapeHtml(mat.sourceName||'PDF'):'Ссылка'}</div></div><div class="row"><button class="btn ghost open-admin-material" data-t="${t.id}" data-m="${mat.id}">Открыть</button><button class="btn ghost rename-material" data-t="${t.id}" data-m="${mat.id}">Название</button><button class="btn danger delete-material" data-t="${t.id}" data-m="${mat.id}">×</button></div></div>`).join('')}</div>`:'<div class="empty compact">Материалов пока нет.</div>'}</div>
-  <h3>Задания (${t.tasks.length})</h3><div>${t.tasks.map((q,i)=>`<div class="task-edit-item spread"><div><b>${i+1}. ${escapeHtml(q.title||q.question)}</b><div class="small">Тип: ${escapeHtml(typeName(q.type))}</div></div><div class="row"><button class="btn ghost move-up" data-t="${t.id}" data-i="${i}">↑</button><button class="btn ghost move-down" data-t="${t.id}" data-i="${i}">↓</button><button class="btn ghost edit-task" data-t="${t.id}" data-q="${q.id}">Изменить</button><button class="btn danger delete-task" data-t="${t.id}" data-q="${q.id}">×</button></div></div>`).join('')}</div><button class="btn primary add-task" data-t="${t.id}">+ Добавить задание</button></div>`).join('')}`;
-  $('#addTopic').onclick=()=>editTopic(null);
-  $$('.edit-topic').forEach(b=>b.onclick=()=>editTopic(content.topics.find(t=>t.id===b.dataset.id)));
-  $$('.delete-topic').forEach(b=>b.onclick=async()=>{if(confirm('Удалить тему вместе с заданиями?')){content.topics=content.topics.filter(t=>t.id!==b.dataset.id);await persistContent();renderAdmin('content')}});
-  $$('.add-material').forEach(b=>b.onclick=()=>addMaterial(b.dataset.t));
-  $$('.open-admin-material').forEach(b=>{b.onclick=()=>{const t=content.topics.find(x=>x.id===b.dataset.t);openMaterial(t,b.dataset.m)}});
-  $$('.rename-material').forEach(b=>b.onclick=()=>renameMaterial(b.dataset.t,b.dataset.m));
-  $$('.delete-material').forEach(b=>b.onclick=()=>deleteMaterial(b.dataset.t,b.dataset.m));
-  $$('.add-task').forEach(b=>b.onclick=()=>editTask(b.dataset.t,null));
-  $$('.edit-task').forEach(b=>b.onclick=()=>editTask(b.dataset.t,content.topics.find(t=>t.id===b.dataset.t).tasks.find(q=>q.id===b.dataset.q)));
-  $$('.delete-task').forEach(b=>b.onclick=async()=>{if(confirm('Удалить задание?')){const t=content.topics.find(t=>t.id===b.dataset.t);t.tasks=t.tasks.filter(q=>q.id!==b.dataset.q);await persistContent();renderAdmin('content')}});
-  $$('.move-up').forEach(b=>b.onclick=()=>moveTask(b.dataset.t,+b.dataset.i,-1));$$('.move-down').forEach(b=>b.onclick=()=>moveTask(b.dataset.t,+b.dataset.i,1));
+function geographyTopics(){
+  if(!Array.isArray(content.geographyTopics)){
+    content.geographyTopics = clone(GEOGRAPHY_5_TOPICS);
+  }
+  return content.geographyTopics;
 }
 
+function activeAdminTopics(){
+  return adminSubject === 'geography'
+    ? geographyTopics()
+    : (content.topics || []);
+}
+
+function setActiveAdminTopics(topics){
+  if(adminSubject === 'geography'){
+    content.geographyTopics = topics;
+  }else{
+    content.topics = topics;
+  }
+}
+
+function findTopicAny(topicId){
+  return (content.topics || []).find(t => t.id === topicId)
+    || geographyTopics().find(t => t.id === topicId);
+}
+function renderAdminContent(){
+  const m = $('#adminMain');
+  const topics = activeAdminTopics();
+
+  m.innerHTML = `
+    <div class="admin-card">
+      <div class="spread">
+        <div>
+          <h2>${adminSubject === 'geography' ? 'География • 5 класс' : 'История • 5 класс'}</h2>
+          <p class="small">
+            Можно менять темы, добавлять презентации и редактировать задания.
+          </p>
+        </div>
+
+        <button class="btn yellow" id="addTopic">+ Новая тема</button>
+      </div>
+
+      <div class="controls" style="margin-top:18px">
+        <button
+          class="btn ${adminSubject === 'history' ? 'primary' : 'ghost'}"
+          data-admin-subject="history">
+          🏺 История
+        </button>
+
+        <button
+          class="btn ${adminSubject === 'geography' ? 'primary' : 'ghost'}"
+          data-admin-subject="geography">
+          🌍 География
+        </button>
+      </div>
+    </div>
+
+    ${topics.map(t => `
+      <div class="admin-card" style="margin-top:18px">
+
+        <div class="spread">
+          <div>
+            <div class="kicker">${escapeHtml(t.number || '')}</div>
+            <h2>${t.emoji || '📚'} ${escapeHtml(t.title || '')}</h2>
+            <p>${escapeHtml(t.short || '')}</p>
+          </div>
+
+          <div class="controls">
+            <button class="btn ghost edit-topic" data-id="${t.id}">
+              Изменить тему
+            </button>
+
+            <button class="btn danger delete-topic" data-id="${t.id}">
+              Удалить
+            </button>
+          </div>
+        </div>
+
+        <div class="material-admin" style="margin-top:22px">
+          <div class="spread">
+            <div>
+              <h3>Материалы (${(t.materials || []).length})</h3>
+              <p class="small">
+                PDF и PPTX открываются ребёнку прямо в теме.
+                Можно также добавить внешнюю ссылку.
+              </p>
+            </div>
+
+            <button class="btn yellow add-material" data-t="${t.id}">
+              + Презентация
+            </button>
+          </div>
+
+          ${(t.materials || []).map(mat => `
+            <div class="spread" style="margin-top:12px">
+              <div>
+                🖥️
+                <b>${escapeHtml(mat.title || 'Презентация')}</b>
+                <div class="small">
+                  ${escapeHtml(mat.sourceName || mat.url || '')}
+                </div>
+              </div>
+
+              <div class="controls">
+                <button
+                  class="btn ghost open-admin-material"
+                  data-t="${t.id}"
+                  data-m="${mat.id}">
+                  Открыть
+                </button>
+
+                <button
+                  class="btn ghost rename-material"
+                  data-t="${t.id}"
+                  data-m="${mat.id}">
+                  Название
+                </button>
+
+                <button
+                  class="btn danger delete-material"
+                  data-t="${t.id}"
+                  data-m="${mat.id}">
+                  ×
+                </button>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+
+        <h3 style="margin-top:24px">
+          Задания (${(t.tasks || []).length})
+        </h3>
+
+        ${(t.tasks || []).map((q,i) => `
+          <div class="task-edit-item spread">
+            <div>
+              <b>${i + 1}. ${escapeHtml(q.title || q.question || 'Задание')}</b>
+              <div class="small">
+                Тип: ${escapeHtml(typeName(q.type))}
+              </div>
+            </div>
+
+            <div class="controls">
+              <button
+                class="btn ghost move-up"
+                data-t="${t.id}"
+                data-i="${i}">
+                ↑
+              </button>
+
+              <button
+                class="btn ghost move-down"
+                data-t="${t.id}"
+                data-i="${i}">
+                ↓
+              </button>
+
+              <button
+                class="btn ghost edit-task"
+                data-t="${t.id}"
+                data-q="${q.id}">
+                Изменить
+              </button>
+
+              <button
+                class="btn danger delete-task"
+                data-t="${t.id}"
+                data-q="${q.id}">
+                ×
+              </button>
+            </div>
+          </div>
+        `).join('')}
+
+        <button
+          class="btn yellow add-task"
+          data-t="${t.id}"
+          style="margin-top:14px">
+          + Задание
+        </button>
+      </div>
+    `).join('')}
+  `;
+
+  $$('[data-admin-subject]').forEach(b => {
+    b.onclick = () => {
+      adminSubject = b.dataset.adminSubject;
+      renderAdminContent();
+    };
+  });
+
+  $('#addTopic').onclick = () => editTopic(null);
+
+  $$('.edit-topic').forEach(b => {
+    b.onclick = () => editTopic(findTopicAny(b.dataset.id));
+  });
+
+  $$('.delete-topic').forEach(b => {
+    b.onclick = async () => {
+      if(!confirm('Удалить тему вместе с заданиями?')) return;
+
+      setActiveAdminTopics(
+        activeAdminTopics().filter(t => t.id !== b.dataset.id)
+      );
+
+      await persistContent();
+      renderAdminContent();
+    };
+  });
+
+  $$('.add-material').forEach(b => {
+    b.onclick = () => addMaterial(b.dataset.t);
+  });
+
+  $$('.open-admin-material').forEach(b => {
+    b.onclick = () => {
+      const t = findTopicAny(b.dataset.t);
+      if(t) openMaterial(t, b.dataset.m);
+    };
+  });
+
+  $$('.rename-material').forEach(b => {
+    b.onclick = () => renameMaterial(b.dataset.t, b.dataset.m);
+  });
+
+  $$('.delete-material').forEach(b => {
+    b.onclick = () => deleteMaterial(b.dataset.t, b.dataset.m);
+  });
+
+  $$('.add-task').forEach(b => {
+    b.onclick = () => editTask(b.dataset.t, null);
+  });
+
+  $$('.edit-task').forEach(b => {
+    b.onclick = () => {
+      const t = findTopicAny(b.dataset.t);
+      const q = (t?.tasks || []).find(q => q.id === b.dataset.q);
+      editTask(b.dataset.t, q);
+    };
+  });
+
+  $$('.delete-task').forEach(b => {
+    b.onclick = async () => {
+      if(!confirm('Удалить задание?')) return;
+
+      const t = findTopicAny(b.dataset.t);
+      if(!t) return;
+
+      t.tasks = (t.tasks || []).filter(q => q.id !== b.dataset.q);
+
+      await persistContent();
+      renderAdminContent();
+    };
+  });
+
+  $$('.move-up').forEach(b => {
+    b.onclick = () => moveTask(b.dataset.t, +b.dataset.i, -1);
+  });
+
+  $$('.move-down').forEach(b => {
+    b.onclick = () => moveTask(b.dataset.t, +b.dataset.i, 1);
+  });
+}
 async function uploadPresentation(topicId,title,file){
   if(mode!=='server')throw new Error('Загрузка файлов работает после публикации сайта на Railway.');
   const form=new FormData();form.append('topicId',topicId);form.append('title',title);form.append('file',file);
@@ -994,38 +1240,109 @@ function addMaterial(topicId){
     const title=$('#matTitle').value.trim()||'Презентация';const status=$('#uploadStatus');const btn=$('#saveMaterial');
     try{btn.disabled=true;status.innerHTML='<div class="feedback hint">Загружаю… Не закрывайте окно.</div>';
       if(kind==='file'){const f=$('#matFile').files[0];if(!f)throw new Error('Выберите файл');const r=await uploadPresentation(topicId,title,f);content=r.content;adminData.content=content;}
-      else{const url=$('#matUrl').value.trim();if(!/^https?:\/\//i.test(url))throw new Error('Введите полную ссылку, начиная с https://');const t=content.topics.find(x=>x.id===topicId);t.materials=t.materials||[];t.materials.push({id:uid(),type:'presentation',title,source:'link',url});await persistContent();}
+      else{const url=$('#matUrl').value.trim();if(!/^https?:\/\//i.test(url))throw new Error('Введите полную ссылку, начиная с https://');const t=findTopicAny(topicId);t.materials=t.materials||[];t.materials.push({id:uid(),type:'presentation',title,source:'link',url});await persistContent();}
       closeModal();renderAdmin('content');
     }catch(e){status.innerHTML=`<div class="feedback bad">${escapeHtml(e.message)}</div>`;btn.disabled=false;}
   };
 }
 async function renameMaterial(topicId,mid){
-  const t=content.topics.find(x=>x.id===topicId),mat=(t.materials||[]).find(x=>x.id===mid);if(!mat)return;
+ const t=findTopicAny(topicId),mat=(t.materials||[]).find(x=>x.id===mid);if(!mat)return;
   openModal(`<h2>Название материала</h2><div class="field"><label>Что увидит ребёнок</label><input id="renameMat" value="${escapeHtml(mat.title||'Презентация')}"></div><div class="controls"><button class="btn primary" id="renameMatSave">Сохранить</button><button class="btn ghost" onclick="closeModal()">Отмена</button></div>`);
   $('#renameMatSave').onclick=async()=>{mat.title=$('#renameMat').value.trim()||'Презентация';await persistContent();closeModal();renderAdmin('content')};
 }
 async function deleteMaterial(topicId,mid){
   if(!confirm('Удалить эту презентацию из темы?'))return;
-  const t=content.topics.find(x=>x.id===topicId),mat=(t.materials||[]).find(x=>x.id===mid);if(!mat)return;
+const t=findTopicAny(topicId),mat=(t.materials||[]).find(x=>x.id===mid);if(!mat)return;
   if(mode==='server'&&mat.source==='file'){const r=await api('/api/presentations/'+encodeURIComponent(mid),{method:'DELETE'});content=r.content;adminData.content=content;}
   else{t.materials=(t.materials||[]).filter(x=>x.id!==mid);await persistContent();}
   renderAdmin('content');
 }
 function typeName(t){return ({choice:'один ответ',multi:'несколько ответов',text:'ввод текста',order:'порядок',match:'пары',sort:'сортировка',canvas:'рисование'})[t]||t}
-async function moveTask(tid,i,d){const t=content.topics.find(t=>t.id===tid),j=i+d;if(j<0||j>=t.tasks.length)return;[t.tasks[i],t.tasks[j]]=[t.tasks[j],t.tasks[i]];await persistContent();renderAdmin('content')}
+async function moveTask(tid,i,d){
+  const t=findTopicAny(tid);
 
-function editTopic(t){
-  const x=t||{id:uid(),number:'§ ',title:'Новая тема',emoji:'📚',short:'',facts:['','',''],materials:[],tasks:[]};
-  openModal(`<h2>${t?'Изменить тему':'Новая тема'}</h2><div class="form-grid">
-    <div class="field"><label>Номер</label><input id="etNum" value="${escapeHtml(x.number)}"></div>
-    <div class="field"><label>Название</label><input id="etTitle" value="${escapeHtml(x.title)}"></div>
-    <div class="field"><label>Эмодзи</label><input id="etEmoji" value="${escapeHtml(x.emoji||'📚')}"></div>
-    <div class="field"><label>Короткое описание</label><textarea id="etShort">${escapeHtml(x.short||'')}</textarea></div>
-    <div class="field"><label>3 главных факта</label><textarea id="etFacts">${escapeHtml((x.facts||[]).join('\n'))}</textarea><div class="help">Каждый факт с новой строки.</div></div>
-  </div><div class="controls"><button class="btn primary" id="saveTopic">Сохранить</button><button class="btn ghost" onclick="closeModal()">Отмена</button></div>`);
-  $('#saveTopic').onclick=async()=>{x.number=$('#etNum').value;x.title=$('#etTitle').value;x.emoji=$('#etEmoji').value;x.short=$('#etShort').value;x.facts=$('#etFacts').value.split('\n').map(s=>s.trim()).filter(Boolean);if(!t)content.topics.push(x);await persistContent();closeModal();renderAdmin('content')};
+  if(!t) return;
+
+  const j=i+d;
+
+  if(j<0 || j>=t.tasks.length) return;
+
+  [t.tasks[i],t.tasks[j]]=[t.tasks[j],t.tasks[i]];
+
+  await persistContent();
+  renderAdminContent();
 }
+function editTopic(t){
+  const x=t || {
+    id:uid(),
+    number:'§ ',
+    title:'Новая тема',
+    emoji:'📚',
+    short:'',
+    facts:['','',''],
+    materials:[],
+    tasks:[]
+  };
 
+  openModal(`
+    <h2>${t ? 'Изменить тему' : 'Новая тема'}</h2>
+
+    <div class="form-grid">
+
+      <div class="field">
+        <label>Номер</label>
+        <input id="etNum" value="${escapeHtml(x.number || '')}">
+      </div>
+
+      <div class="field">
+        <label>Название</label>
+        <input id="etTitle" value="${escapeHtml(x.title || '')}">
+      </div>
+
+      <div class="field">
+        <label>Эмодзи</label>
+        <input id="etEmoji" value="${escapeHtml(x.emoji || '📚')}">
+      </div>
+
+      <div class="field">
+        <label>Короткое описание</label>
+        <textarea id="etShort">${escapeHtml(x.short || '')}</textarea>
+      </div>
+
+      <div class="field">
+        <label>3 главных факта</label>
+        <textarea id="etFacts">${escapeHtml((x.facts || []).join('\n'))}</textarea>
+        <div class="help">Каждый факт с новой строки.</div>
+      </div>
+
+    </div>
+
+    <div class="controls">
+      <button class="btn primary" id="saveTopic">Сохранить</button>
+      <button class="btn ghost" onclick="closeModal()">Отмена</button>
+    </div>
+  `);
+
+  $('#saveTopic').onclick=async()=>{
+    x.number=$('#etNum').value;
+    x.title=$('#etTitle').value;
+    x.emoji=$('#etEmoji').value;
+    x.short=$('#etShort').value;
+
+    x.facts=$('#etFacts').value
+      .split('\n')
+      .map(s=>s.trim())
+      .filter(Boolean);
+
+    if(!t){
+      activeAdminTopics().push(x);
+    }
+
+    await persistContent();
+    closeModal();
+    renderAdminContent();
+  };
+}
 function editTask(topicId,q){
   const x=q?clone(q):{id:uid(),type:'choice',title:'Новое задание',question:'',options:['','',''],correct:0,hint:'',explanation:''};
   openModal(`<h2>${q?'Изменить задание':'Новое задание'}</h2><div class="form-grid">
@@ -1054,7 +1371,7 @@ function editTask(topicId,q){
     if(type==='order'){x.items=$('#fItems').value.split('\n').map(s=>s.trim()).filter(Boolean)}
     if(type==='match'){x.pairs=$('#fPairs').value.split('\n').map(s=>s.split('=').map(v=>v.trim())).filter(p=>p.length>=2&&p[0]&&p[1]).map(p=>[p[0],p.slice(1).join(' = ')])}
     if(type==='sort'){x.categories=$('#fCategories').value.split('\n').map(line=>{const parts=line.split('=');const name=(parts.shift()||'').trim();const items=parts.join('=').split('|').map(v=>v.trim()).filter(Boolean);return {name,items}}).filter(c=>c.name&&c.items.length)}
-    const t=content.topics.find(t=>t.id===topicId); if(q){const i=t.tasks.findIndex(a=>a.id===q.id);t.tasks[i]=x}else t.tasks.push(x); await persistContent();closeModal();renderAdmin('content');
+   const t=findTopicAny(topicId); if(q){const i=t.tasks.findIndex(a=>a.id===q.id);t.tasks[i]=x}else t.tasks.push(x); await persistContent();closeModal();renderAdmin('content');
   };
 }
 
@@ -1077,7 +1394,7 @@ function renderResults(){
 
 const allResultTopics = [
   ...(content.topics || []),
-  ...GEOGRAPHY_5_TOPICS
+...geographyTopics()
 ];
 
 const topicMap = Object.fromEntries(
