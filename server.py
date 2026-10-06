@@ -279,22 +279,51 @@ class Handler(SimpleHTTPRequestHandler):
             except: return self.send_json({'error':'Некорректный ID'},400)
             c=db(); c.execute('DELETE FROM progress WHERE student_id=?',(sid,)); c.execute('DELETE FROM students WHERE id=?',(sid,)); c.commit(); c.close(); return self.send_json({'ok':True})
         if self.path.startswith('/api/presentations/'):
-            if not self.teacher_ok(): return self.send_json({'error':'Неверный PIN'},401)
+            if not self.teacher_ok():
+                return self.send_json({'error':'Неверный PIN'},401)
+
             mid=self.path.rsplit('/',1)[-1]
-for t in (
-    (obj.get('topics') or [])
-    + (obj.get('geographyTopics') or [])
-):
+
+            obj=get_content()
+            found=None
+
+            for t in (
+                (obj.get('topics') or [])
+                + (obj.get('geographyTopics') or [])
+            ):
                 mats=t.get('materials',[])
+
                 for m in mats:
                     if m.get('id')==mid:
-                        found=m; t['materials']=[x for x in mats if x.get('id')!=mid]; break
-                if found: break
-            if not found: return self.send_json({'error':'Материал не найден'},404)
+                        found=m
+                        t['materials']=[
+                            x for x in mats
+                            if x.get('id')!=mid
+                        ]
+                        break
+
+                if found:
+                    break
+
+            if not found:
+                return self.send_json(
+                    {'error':'Материал не найден'},
+                    404
+                )
+
             url=found.get('url','')
+
             if found.get('source')=='file' and url.startswith('/uploads/'):
                 (UPLOAD_DIR/Path(url).name).unlink(missing_ok=True)
-            set_content(obj); return self.send_json({'ok':True,'content':obj})
+
+            set_content(obj)
+
+            return self.send_json({
+                'ok':True,
+                'content':obj
+            })
+
+        return self.send_json({'error':'Не найдено'},404)
         return self.send_json({'error':'Не найдено'},404)
 
 if __name__=='__main__':
