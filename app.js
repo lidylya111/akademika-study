@@ -808,6 +808,19 @@ function openMaterial(t,mid){
   const safeUrl=escapeHtml(m.url||'');
   openModal(`<div class="presentation-modal-head"><div><div class="kicker">Материал к теме</div><h2>${escapeHtml(m.title||'Презентация')}</h2></div><button class="btn ghost" onclick="closeModal()">Закрыть</button></div><div class="presentation-viewer"><iframe src="${safeUrl}" title="${escapeHtml(m.title||'Презентация')}" loading="lazy"></iframe></div><div class="controls"><a class="btn ghost link-btn" href="${safeUrl}" target="_blank" rel="noopener">Открыть в новой вкладке</a><button class="btn primary" onclick="closeModal()">Я повторил(а) тему → к заданиям</button></div><p class="small">Если встроенный просмотр не появился, используйте кнопку «Открыть в новой вкладке».</p>`);
 }
+function returnToCurrentSubject(){
+  if(currentGrade === '5' && currentSubject === 'geography'){
+    renderGeographyHome();
+    return;
+  }
+
+  if(currentGrade === '5' && currentSubject === 'history'){
+    renderCourseHome();
+    return;
+  }
+
+  renderSubjectSelect(currentGrade || '5');
+}
 function renderTopic(t){
   const state=taskState[t.id];
   const idx=Math.max(0,Math.min(state.index,Math.max(0,t.tasks.length-1))); state.index=idx;
@@ -819,7 +832,7 @@ function renderTopic(t){
     ${materialCards(t)}
     ${completed ? completionHtml(t,state) : (t.tasks.length?`<div class="task-wrap"><nav class="task-nav">${t.tasks.map((q,i)=>`<button data-idx="${i}" class="${i===idx?'active':''} ${state.solved[q.id]?'done':''}">${i+1}. ${escapeHtml(q.title||'Задание')}</button>`).join('')}</nav><section id="taskArea"></section></div>`:`<div class="admin-card"><b>Заданий пока нет.</b> Сначала изучи материал выше.</div>`)}
   `;
-$('#backHome').onclick=renderCourseHome;
+$('#backHome').onclick=returnToCurrentSubject;
   $$('.material-card').forEach(b=>b.onclick=()=>openMaterial(t,b.dataset.mid));
   if(completed){ $('#againBtn').onclick=()=>{taskState[t.id]={index:0,solved:{},attempts:{},answers:{},points:{}};renderTopic(t)}; return; }
   if(!t.tasks.length)return;
@@ -833,7 +846,7 @@ function completionHtml(t,state){
   const percent=Math.round(earned/t.tasks.length*100); const stars=starsFor(percent);
   saveProgress(t.id,percent,stars,Object.values(state.attempts).reduce((a,b)=>a+b,0));
   setTimeout(confetti,80);
-  return `<div class="completion"><div class="trophy">${percent>=90?'🏆':'🌟'}</div><h2>Урок пройден!</h2><div class="stars" style="font-size:32px">${starsText(stars)}</div><p class="score">${solved} из ${t.tasks.length} заданий • ${percent}%</p><p>${percent>=90?'Отличная работа!':percent>=70?'Тема освоена. Можно двигаться дальше!':'Можно пройти ещё раз и улучшить результат.'}</p><div class="controls" style="justify-content:center"><button class="btn yellow" id="againBtn">Пройти ещё раз</button><button class="btn primary" onclick="renderCourseHome()">К темам</button></div></div>`;
+  return `<div class="completion"><div class="trophy">${percent>=90?'🏆':'🌟'}</div><h2>Урок пройден!</h2><div class="stars" style="font-size:32px">${starsText(stars)}</div><p class="score">${solved} из ${t.tasks.length} заданий • ${percent}%</p><p>${percent>=90?'Отличная работа!':percent>=70?'Тема освоена. Можно двигаться дальше!':'Можно пройти ещё раз и улучшить результат.'}</p><div class="controls" style="justify-content:center"><button class="btn yellow" id="againBtn">Пройти ещё раз</button><button class="btn primary" onclick="returnToCurrentSubject()"К темам</button></div></div>`;
 }
 
 async function saveProgress(topicId,percent,stars,attempts){
@@ -1060,7 +1073,16 @@ function renderStudents(){
 }
 
 function renderResults(){
-  const m=$('#adminMain'); const topicMap=Object.fromEntries(content.topics.map(t=>[t.id,`${t.number} ${t.title}`]));
+ const m=$('#adminMain');
+
+const allResultTopics = [
+  ...(content.topics || []),
+  ...GEOGRAPHY_5_TOPICS
+];
+
+const topicMap = Object.fromEntries(
+  allResultTopics.map(t => [t.id, `${t.number} ${t.title}`])
+);
   const rs=(adminData.results||[]).slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
   m.innerHTML=`<div class="admin-card"><h2>Результаты учеников</h2><p class="small">Сохраняются после завершения темы.</p></div><div class="admin-card">${rs.length?rs.map(r=>`<div class="result-item spread"><div><b>${escapeHtml(r.student_name||r.studentName||'Ученик')}</b><div>${escapeHtml(topicMap[r.topic_id]||r.topicId||'Тема')}</div><div class="small">${r.date?new Date(r.date).toLocaleString('ru-RU'):''}</div></div><div style="text-align:right"><b>${r.percent||0}%</b><div class="stars">${starsText(+r.stars||0)}</div><div class="small">Попыток: ${r.attempts||0}</div></div></div>`).join(''):'<div class="empty">Результатов пока нет.</div>'}</div>`;
 }
