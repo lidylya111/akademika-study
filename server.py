@@ -252,15 +252,16 @@ class Handler(SimpleHTTPRequestHandler):
                     out=UPLOAD_DIR/f'{token}.pdf'
                     if proc.returncode!=0 or not out.exists():
                         raise ValueError('Не удалось преобразовать PPTX. Сохраните презентацию как PDF и загрузите PDF.')
-                obj=get_content(); all_topics = (
-    (obj.get('topics') or [])
-    + (obj.get('geographyTopics') or [])
-)
+                obj=get_content()
+                all_topics = (
+                    (obj.get('topics') or [])
+                    + (obj.get('geographyTopics') or [])
+                )
 
-topic = next(
-    (t for t in all_topics if t.get('id') == topic_id),
-    None
-)
+                topic = next(
+                    (t for t in all_topics if t.get('id') == topic_id),
+                    None
+                )
                 if not topic:
                     out.unlink(missing_ok=True); raise ValueError('Тема не найдена')
                 mat={'id':'mat-'+uuid.uuid4().hex[:10],'type':'presentation','title':title,'source':'file','url':'/uploads/'+out.name,'sourceName':original,'createdAt':now()}
