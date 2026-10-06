@@ -252,7 +252,15 @@ class Handler(SimpleHTTPRequestHandler):
                     out=UPLOAD_DIR/f'{token}.pdf'
                     if proc.returncode!=0 or not out.exists():
                         raise ValueError('Не удалось преобразовать PPTX. Сохраните презентацию как PDF и загрузите PDF.')
-                obj=get_content(); topic=next((t for t in obj.get('topics',[]) if t.get('id')==topic_id),None)
+                obj=get_content(); all_topics = (
+    (obj.get('topics') or [])
+    + (obj.get('geographyTopics') or [])
+)
+
+topic = next(
+    (t for t in all_topics if t.get('id') == topic_id),
+    None
+)
                 if not topic:
                     out.unlink(missing_ok=True); raise ValueError('Тема не найдена')
                 mat={'id':'mat-'+uuid.uuid4().hex[:10],'type':'presentation','title':title,'source':'file','url':'/uploads/'+out.name,'sourceName':original,'createdAt':now()}
@@ -272,8 +280,10 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path.startswith('/api/presentations/'):
             if not self.teacher_ok(): return self.send_json({'error':'Неверный PIN'},401)
             mid=self.path.rsplit('/',1)[-1]
-            obj=get_content(); found=None
-            for t in obj.get('topics',[]):
+for t in (
+    (obj.get('topics') or [])
+    + (obj.get('geographyTopics') or [])
+):
                 mats=t.get('materials',[])
                 for m in mats:
                     if m.get('id')==mid:
