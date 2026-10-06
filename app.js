@@ -660,13 +660,13 @@ if(grade === '5' && subject === 'geography'){
   currentGrade = '5';
   currentSubject = 'geography';
   currentTopicId = null;
-
-  const completed = GEOGRAPHY_5_TOPICS.filter(
+const geoTopics = geographyTopics();
+const completed = geoTopics.filter(
     t => (progress[t.id]?.percent || 0) >= 70
   ).length;
 
   const overall = Math.round(
-    completed / GEOGRAPHY_5_TOPICS.length * 100
+completed / geoTopics.length * 100
   );
 
   app.innerHTML = `
@@ -699,7 +699,7 @@ if(grade === '5' && subject === 'geography'){
           </div>
 
           <p class="small">
-            Пройдено ${completed} из ${GEOGRAPHY_5_TOPICS.length} проверочных
+            Пройдено ${completed} из ${geoTopics.length} проверочных
           </p>
         </div>
       </div>
@@ -713,7 +713,7 @@ if(grade === '5' && subject === 'geography'){
     </div>
 
     <section class="topic-grid">
-      ${GEOGRAPHY_5_TOPICS.map(t => {
+${geoTopics.map(t => {
         const tp = progress[t.id]?.percent || 0;
         const st = starsFor(tp);
 
@@ -747,8 +747,7 @@ if(grade === '5' && subject === 'geography'){
 
 
 function openGeographyTopic(id){
-  const topic = GEOGRAPHY_5_TOPICS.find(t => t.id === id);
-
+const topic = geographyTopics().find(t => t.id === id);
   if(!topic) return;
 
   currentGrade = '5';
@@ -938,8 +937,32 @@ async function teacherEntry(){
 }
 
 async function openAdmin(){
-  if(mode==='server') adminData=await api('/api/admin');
-  else { if(teacherPin!=='2468')throw new Error('bad pin'); adminData={content,students:[{id:'demo',name:'Демо-ученик',code:'demo'}],results:Object.entries(progress).map(([topicId,p])=>({student_name:'Демо-ученик',topic_id:topicId,...p}))}; }
+  if(mode==='server'){
+    adminData=await api('/api/admin');
+  }else{
+    if(teacherPin!=='2468') throw new Error('bad pin');
+
+    adminData={
+      content,
+      students:[{id:'demo',name:'Демо-ученик',code:'demo'}],
+      results:Object.entries(progress).map(([topicId,p])=>({
+        student_name:'Демо-ученик',
+        topic_id:topicId,
+        percent:p.percent,
+        stars:p.stars,
+        attempts:p.attempts,
+        date:p.date
+      }))
+    };
+  }
+
+  content=adminData.content;
+
+  if(!Array.isArray(content.geographyTopics)){
+    content.geographyTopics=clone(GEOGRAPHY_5_TOPICS);
+    await persistContent();
+  }
+
   renderAdmin('content');
 }
 
